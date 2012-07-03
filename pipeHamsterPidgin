@@ -1,0 +1,151 @@
+#! /usr/bin/perl -I/home/roger/Programming/PipeHamsterPidgin
+ 
+use strict;
+use warnings;
+ 
+use Net::DBus;
+use Net::DBus::Reactor;
+# use Net::DBus::RemoteObject;
+use Data::Dumper;
+use Status;
+
+# There is the system bus and the session bus. Here we are
+# interested in the session bus
+my $bus = Net::DBus->session;
+
+# we connect the services Pidgin offers through D-Bus
+my $purple = $bus->get_service('im.pidgin.purple.PurpleService');
+my $pidginObject = $purple->get_object('/im/pidgin/purple/PurpleObject', 'im.pidgin.purple.PurpleInterface');
+my $hamsterService = $bus->get_service("org.gnome.Hamster");
+my $hamsterObject = $hamsterService->get_object("/org/gnome/Hamster","org.gnome.Hamster");
+
+my $notifyService = $bus->get_service("org.kde.knotify");
+
+my $notifyObject = $notifyService->get_object("/Notify", "org.kde.KNotify");
+
+
+# my $hamsterObjectRemote = Net::DBus::RemoteObject->new('org.gnome.Hamster', '/org/gnome/Hamster');
+# print Dumper($hamsterObjectRemote);
+ 
+# print Dumper($hamsterObject->GetActivities(""));
+# print Dumper($hamsterObject->GetTodaysFacts());
+# exit;
+
+use c;
+my $c = new c;
+
+$c->config->pidgin($pidginObject);
+
+my $statPidgin = new Status;
+
+$c->req->param({ 'key' => 'id', 'value' => '2' });
+$c->req->param({ 'key' => 'primitive', 'value' => '1' });
+$c->req->param({ 'key' => 'label', 'value' => 'Test' });
+
+my $states = $statPidgin->list($c);
+
+# my $return = $statPidgin->types($c);
+# print Dumper($return);
+# exit;
+
+# $statPidgin->change($c);
+# $statPidgin->remove($c);
+# print Dumper($states);
+
+# my $message = 'Test';
+# $pidginObject->PurpleSavedstatusSetMessage($status, $message);
+# $pidginObject->PurpleSavedstatusActivate($status);
+
+# exit;
+ 
+# we register a signal handler for when a connection occurs
+# $pidginObject->connect_to_signal('BuddySignedOn',
+#     sub {
+#         my $buddyId = shift;
+#         print "BuddySignedOn:", $pidginObject->PurpleBuddyGetAlias($buddyId), "\n";
+#     }
+# );
+
+sub pipeHamsterPidgin {
+    # print 'BLA'."\n";
+    my @bla = $hamsterObject->GetTodaysFacts();
+    my $last = $bla[0][$#{$bla[0]}];
+    print Dumper($bla[0][$#{$bla[0]}]);
+#        $VAR1 = [
+#          565,
+#          1332356820,
+#          1332361614,
+#          '',
+#          'Alarming',
+#          4,
+#          'Work',
+#          [
+#            'research'
+#          ],
+#          1332288000,
+#          4794
+#        ];
+    my $todo = $last->[4];
+    my $category = $last->[6];
+
+    my $message = $todo.'@'.$category;
+    print 'Setting to <'.$message.'>'."\n";
+
+    print 'Setting to <'.$category.'>'."\n";
+    my $facts = join(',', @{$last->[7]});
+    print 'Setting to <'.$facts.'>'."\n";
+
+    my $available = 2;
+    my $away = 5;
+
+    #
+    # get Status List
+    #
+    my $statusC = $available;
+
+    if($category !~ /^work$/i){
+        $statusC = $away;
+
+        $notifyObject->event("warning", "kde", [], "message title","You are marked as <".$statusC.">", [], [], 0, 0);
+
+    }
+
+    my $status = $pidginObject->PurpleSavedstatusFind($message);
+    if(! $status > 0){
+        $status = $pidginObject->PurpleSavedstatusNew($message, $statusC);
+    }
+    # my $current = $pidginObject->PurpleSavedstatusGetType($pidginObject->PurpleSavedstatusGetCurrent());
+    # print $status."\n";
+    # exit;
+
+
+
+    $pidginObject->PurpleSavedstatusSetMessage($status, $message);
+    $pidginObject->PurpleSavedstatusActivate($status);
+}
+
+#
+# initial
+#
+pipeHamsterPidgin();
+
+$hamsterObject->connect_to_signal('FactsChanged', \&pipeHamsterPidgin );
+
+
+# print Dumper($hamsterService);
+
+# bus.add_signal_receiver(print_activity, dbus_interface="org.gnome.Hamster", signal_name="update_activity")
+# bus.add_signal_receiver(print_fact, dbus_interface="org.gnome.Hamster", signal_name="update_fact")
+
+ 
+# and we start the main loop where the events are processed
+my $reactor = Net::DBus::Reactor->main();
+$reactor->run();
+
+#
+# vim defaults
+#
+# vi:si:ai:sw=4:ts=4:expandtab
+#
+#
+
